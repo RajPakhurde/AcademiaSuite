@@ -159,6 +159,7 @@
 
 
 
--- ALTER TABLE student ADD COLUMN year TEXT;
--- DELETE FROM student WHERE category IN ('Open', 'OBC');
+-- ALTER TABLE student ADD COLUMN image TEXT;
+-- 
+-- DELETE FROM student WHERE category IN ('Open', 'OBC','SC','ST','NT');
 
