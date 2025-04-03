@@ -98,7 +98,7 @@ const StudentAttendence = () => {
 
   const handleRefresh = () => {
     // setshowStudents(false)
-
+   
     setBranch("");
     setYear("");
     setPattern("");
@@ -204,8 +204,11 @@ const StudentAttendence = () => {
         students: studentIds,
         subject,
         semester,
+        pattern,
+        branch,
+        year,
       };
-
+console.log("15-Feb-debug data L: ",data)
       if (subjectType === "ALL") {
         data.subject_marker = "ALL";
         data.subject = null; // No specific subject needed
