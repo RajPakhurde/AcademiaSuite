@@ -163,3 +163,17 @@
 -- 
 -- DELETE FROM student WHERE category IN ('Open', 'OBC','SC','ST','NT');
 
+-- SELECT name FROM sqlite_master WHERE type='table';
+
+-- ** Date: 15 FEB 2025- modify for pattern transfer Function **
+-- ALTER TABLE student_exams ADD COLUMN branch TEXT;
+-- ALTER TABLE student_exams ADD COLUMN pattern TEXT;
+
+-- DELETE FROM student_exams WHERE student_id=123 AND subject_name='Engineering Physics-I';
+-- UPDATE student_exams
+-- SET pattern = 'Old Pattern';
+SELECT COUNT(*) AS total_entries
+FROM student_exams
+WHERE student_id = 123;
+
+-- WHERE student_id IN (154);

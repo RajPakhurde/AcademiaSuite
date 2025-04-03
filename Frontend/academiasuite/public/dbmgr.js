@@ -29,6 +29,15 @@ ipcMain.handle("fetch-data", async (event) => {
   });
 });
 
+ipcMain.handle('getPattern', async (e, data) => {
+  console.log(`Hello 0lla ${data.pattern}`)
+
+  return new Promise((resolve, reject) => {
+    console.log(`Hello 0lla ${data}`)
+  });
+
+})
+
 ipcMain.handle("save-pre-year-sub", async (e, data) => {
   return new Promise((resolve, reject) => {
     // Fetch the row based on fromYear, pattern, semester, subject, and branch
@@ -699,7 +708,7 @@ ipcMain.handle("delete-group", async (event, data) => {
   });
 });
 
-// For Exam_code
+// For Exam_code 15 FeB - 2-25
 // Insert in Exam-code table
 ipcMain.handle("insert-in-exam-code", async (event, data) => {
   const { year, branch, heldin_year, heldin_month, type } = data;
@@ -741,6 +750,146 @@ ipcMain.handle("insert-in-exam-code", async (event, data) => {
     );
   });
 });
+ipcMain.handle("get-all-student-exams", async (event, data) => {
+  return new Promise((resolve, reject) => {
+    // Log incoming data for debugging
+    console.log("The passed conditions from PatternTransfer:", data);
+
+    const { year, pattern, semester, branch } = data;
+
+    // Query to get student IDs and other details from student_exams
+    const query = `
+      SELECT *
+      FROM student_exams
+      WHERE 
+        year = ? AND 
+        pattern = ? AND 
+        semester = ? AND 
+        branch = ?
+    `;
+
+    const params = [year, pattern, semester, branch];
+
+    console.log("SQL Query:", query);
+    console.log("Query Parameters:", params);
+
+    db.all(query, params, (err, examRows) => {
+      if (err) {
+        console.error("❌ Error fetching student exams:", err);
+        return reject(err);
+      }
+
+      if (examRows.length === 0) {
+        console.log("⚠️ No data found for the given conditions.");
+        return resolve([]);
+      }
+
+      // Get all unique student_ids from examRows
+      const studentIds = examRows.map((row) => row.student_id);
+
+      if (studentIds.length === 0) {
+        console.log("⚠️ No student IDs found.");
+        return resolve([]);
+      }
+
+      // Prepare query to fetch student names from students table
+      const studentQuery = `
+        SELECT student_id, name 
+        FROM student
+        WHERE student_id IN (${studentIds.map(() => "?").join(",")})
+      `;
+
+      console.log("Fetching student names with query:", studentQuery);
+      console.log("Student IDs:", studentIds);
+
+      db.all(studentQuery, studentIds, (err, studentRows) => {
+        if (err) {
+          console.error("❌ Error fetching student names:", err);
+          return reject(err);
+        }
+
+        // Create a map of student_id -> student_name for faster lookup
+        const studentMap = {};
+        studentRows.forEach((student) => {
+          studentMap[student.student_id] = student.name;
+        });
+
+        // Merge examRows with corresponding student names
+        const mergedData = examRows.map((row) => ({
+          ...row,
+          student_name: studentMap[row.student_id] || "Unknown", // Handle missing names
+        }));
+
+        console.log("✅ Final Merged Data:", mergedData);
+        resolve(mergedData);
+      });
+    });
+  });
+});
+
+// IPC handler to update pattern for selected students
+ipcMain.handle("update-student-pattern", async (event, data) => {
+  console.log("Received data for pattern update:");
+  console.log("Student Data:", data?.studentData);
+  console.log("Transfer Pattern:", data?.transferPattern);
+
+  if (
+    !data ||
+    !data.studentData ||
+    data.studentData.length === 0 ||
+    !data.transferPattern ||
+    data.transferPattern === "Select pattern"
+  ) {
+    console.error("❌ Invalid data received. Aborting query.");
+    return { success: false, error: "Invalid data received. No update performed." };
+  }
+
+  const { studentData, transferPattern } = data;
+
+  return new Promise((resolve, reject) => {
+    // Prepare queries for each student
+    const queries = studentData.map((student) => {
+      const query = `
+        UPDATE student_exams
+        SET pattern = ?
+        WHERE student_id = ? AND semester = ? AND subject_marker = ?
+      `;
+      const params = [transferPattern, student.student_id, student.semester, student.subject_marker];
+
+      console.log("SQL Query:", query);
+      console.log("Query Parameters:", params);
+
+      return new Promise((res, rej) => {
+        db.run(query, params, function (err) {
+          if (err) {
+            console.error("❌ Error updating pattern:", err);
+            return rej(err);
+          }
+          res(this.changes);
+        });
+      });
+    });
+
+    // Run all queries
+    Promise.all(queries)
+      .then((results) => {
+        const updatedRows = results.reduce((acc, val) => acc + val, 0);
+        console.log(`✅ Updated pattern for ${updatedRows} records successfully!`);
+        resolve({ success: true, updatedRows });
+      })
+      .catch((err) => {
+        console.error("❌ Error updating multiple records:", err);
+        reject(err);
+      });
+  });
+});
+
+
+
+
+
+
+
 
 // Fetch exam-code data
 ipcMain.handle("fetch-exam-code", async (event, data) => {
@@ -1398,14 +1547,16 @@ ipcMain.handle('delete-student-exam-entry', (event, data) => {
 
 ipcMain.handle("save-student-exams", async (event, data) => {
   return new Promise((resolve, reject) => {
-    const { exam_id, subject, students, semester, subject_marker } = data;
+    const { exam_id, subject, students, semester, subject_marker, pattern, branch, year } = data;
 
     db.serialize(() => {
       db.run("BEGIN TRANSACTION");
 
       const stmt = db.prepare(
-        "INSERT INTO student_exams (exam_id, subject_name,semester, subject_marker,student_id) VALUES (?, ?,?,?, ?)"
+        "INSERT INTO student_exams (exam_id, subject_name, semester, subject_marker, student_id, pattern, branch, year) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
       );
+
+      let hasError = false; // Track if any error occurs
 
       students.forEach((student_id) => {
         stmt.run(
@@ -1414,11 +1565,14 @@ ipcMain.handle("save-student-exams", async (event, data) => {
           semester,
           subject_marker,
           student_id,
-          (error) => {
+          pattern,
+          branch,
+          year,
+          function (error) {
             if (error) {
               console.error("Error while inserting student exam:", error);
-              db.run("ROLLBACK");
-              return reject(error);
+              hasError = true;
+              db.run("ROLLBACK", () => reject(error));
             }
           }
         );
@@ -1427,25 +1581,25 @@ ipcMain.handle("save-student-exams", async (event, data) => {
       stmt.finalize((err) => {
         if (err) {
           console.error("Error finalizing statement:", err);
-          db.run("ROLLBACK");
-          return reject(err);
+          db.run("ROLLBACK", () => reject(err));
+          return;
         }
 
-        db.run("COMMIT", (commitError) => {
-          if (commitError) {
-            console.error("Error committing transaction:", commitError);
-            return reject(commitError);
-          }
+        if (!hasError) {
+          db.run("COMMIT", (commitError) => {
+            if (commitError) {
+              console.error("Error committing transaction:", commitError);
+              return reject(commitError);
+            }
 
-          resolve({
-            success: true,
-            message: "Students assigned successfully!",
+           
           });
-        });
+        }
       });
     });
   });
 });
+
 
 ipcMain.handle("check-existing-assignments", (event, data) => {
   return new Promise((resolve, reject) => {
