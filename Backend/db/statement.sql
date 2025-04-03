@@ -172,8 +172,5 @@
 -- DELETE FROM student_exams WHERE student_id=123 AND subject_name='Engineering Physics-I';
 -- UPDATE student_exams
 -- SET pattern = 'Old Pattern';
-SELECT COUNT(*) AS total_entries
-FROM student_exams
-WHERE student_id = 123;
 
 -- WHERE student_id IN (154);
