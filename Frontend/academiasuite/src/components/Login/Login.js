@@ -7,6 +7,7 @@ import PersonOutlineOutlinedIcon from '@mui/icons-material/PersonOutlineOutlined
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import SchoolIcon from '@mui/icons-material/School';
+import CircularProgress from '@mui/material/CircularProgress';
 
 const Login = (props) => {
     const [username, setUsername] = useState('');
@@ -14,9 +15,11 @@ const Login = (props) => {
     const [message, setMessage] = useState('');
     const [isblur, setIsblur] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();   
+        setIsLoading(true);
         loginUser();
     }
     
@@ -26,12 +29,15 @@ const Login = (props) => {
         switch (user) {
             case 'IP':
                 setMessage("Invalid password")
+                setIsLoading(false);
                 break;
             case 'UNF':
                 setMessage("User not found")
+                setIsLoading(false);
                 break;
             case 'DE':
                 setMessage("Database error")
+                setIsLoading(false);
                 break;
             default:
                 props.setUser(user.username);
@@ -53,7 +59,7 @@ const Login = (props) => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-6">
-            <div className={`w-full max-w-md ${isblur ? 'blur' : ''}`}>
+            <div className={`w-full max-w-md ${isblur ? 'opacity-0 translate-y-4' : 'opacity-100'} transition-all duration-500`}>
                 <div className="bg-white rounded-2xl shadow-xl p-8 transition-all duration-300">
                     <div className="text-center mb-8">
                         <div className="bg-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -75,6 +81,7 @@ const Login = (props) => {
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
                                 required
+                                disabled={isLoading}
                             />
                         </div>
 
@@ -89,10 +96,11 @@ const Login = (props) => {
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full pl-10 pr-10 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all duration-200"
                                 required
+                                disabled={isLoading}
                             />
                             <div 
                                 onClick={togglePasswordVisibility}
-                                className="absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-600 transition-colors"
+                                className={`absolute right-3 top-1/2 transform -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-600 transition-colors ${isLoading ? 'pointer-events-none opacity-50' : ''}`}
                             >
                                 {showPassword ? <VisibilityOffOutlinedIcon /> : <VisibilityOutlinedIcon />}
                             </div>
@@ -109,25 +117,31 @@ const Login = (props) => {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 font-medium"
+                            disabled={isLoading}
+                            className={`w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-200 transition-all duration-200 font-medium flex items-center justify-center ${isLoading ? 'opacity-80 cursor-not-allowed' : ''}`}
                         >
-                            Sign In
+                            {isLoading ? (
+                                <>
+                                    <CircularProgress size={20} color="inherit" className="mr-2" />
+                                    Signing in...
+                                </>
+                            ) : (
+                                'Sign In'
+                            )}
                         </button>
                     </form>
                 </div>
             </div>
 
             {isblur && (
-                <Box sx={{ 
-                    width: '50%',
-                    position: 'fixed',
-                    top: '50%',
-                    left: '50%',
-                    transform: 'translate(-50%, -50%)',
-                    zIndex: 50
-                }}>
-                    <LinearProgress />
-                </Box>
+                <div className="fixed inset-0 flex items-center justify-center z-50">
+                    <div className="text-center">
+                        <CircularProgress size={60} className="text-blue-600" />
+                        <div className="mt-4 bg-white px-6 py-3 rounded-lg shadow-lg">
+                            <p className="text-gray-600 font-medium">Logging into your account...</p>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );
