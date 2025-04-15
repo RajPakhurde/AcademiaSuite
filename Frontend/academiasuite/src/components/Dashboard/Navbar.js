@@ -6,8 +6,15 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import PatternIcon from '@mui/icons-material/Pattern';
 import AppRegistrationIcon from '@mui/icons-material/AppRegistration';
 import LogoutIcon from '@mui/icons-material/Logout';
+import BackupIcon from '@mui/icons-material/Backup';
+import Backup from "../Backup/backup";
+import axios from "axios";
 
 import "../../assets/styles/navbar.css";
+
+const api = axios.create({
+  baseURL: 'http://localhost:5000'
+});
 
 const Navbar = (props) => {
   const [activeMenu, setActiveMenu] = useState("home");
@@ -350,6 +357,22 @@ const Navbar = (props) => {
           }}
         >
         {activeSubSubMenu === "academic_eligibility" && "-"}  Academic Eligibility
+        </p>
+      </div>
+
+      {/* // Backup nav element */}
+      <div
+        style={activeMenu === "backup" ? activeMenustyle : disableMenustyle}
+        className="nav-item hover:text-yellow-200"
+        onClick={() => {
+          setActiveMenu("backup");
+          setActiveSubMenu("");
+          setActiveSubSubMenu("");
+          props.setActiveMainComponent("backup");
+        }}
+      >
+        <p className="mb-0 p-2">
+          <BackupIcon /> Backup
         </p>
       </div>
       </div>

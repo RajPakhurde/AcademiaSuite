@@ -14,6 +14,7 @@ import PatternTransfer from "../Pattern/PatternTransfer";
 import OverallMarks from "../Entry/OverallMarks";
 import OverallEligibility from "../Entry/OverallEligibility";
 import AcademicEligibility from "../Academic/AcademicEligibility";
+import Backup from "../Backup/backup";
 
 const Dashboard = ({user, setDashboardActiveComp}) => {
   const [activeMainComponent, setActiveMainComponent] = useState("home");
@@ -46,35 +47,41 @@ const Dashboard = ({user, setDashboardActiveComp}) => {
         return <AcademicEligibility setActiveMainComponent={setActiveMainComponent} />
       case "student_entry":
         return <StudentEntry setActiveMainComponent={setActiveMainComponent} />;
+      case "backup":
+        return <Backup />;
     }
   };
 
   return (
-    <div className="dashboard-container flex flex-col h-screen">
-      <div className="top-bar flex justify-between pl-[2rem] pr-[2rem] pt-3 pb-3">
+    <div className="h-screen flex flex-col overflow-hidden">
+      <div className="flex items-center justify-between px-8 py-3 bg-white shadow-sm">
         <h2 className="text-2xl font-extrabold text-slate-800">
           ACADEMIA<span className="logo text-[#1659D7]">SUITE</span>
         </h2>
-        <h4 className="username text-xl text-slate-800">
-          {" "}{user}{" "}
+        <div className="flex items-center gap-2">
+          <span className="text-xl text-slate-800">{user}</span>
           <PersonIcon
             style={{
-              color: "2B5ED6",
+              color: "#2B5ED6",
               fontSize: "1.5rem",
-              backgroundColor: "E9F3FD",
+              backgroundColor: "#E9F3FD",
               borderRadius: "5px",
               padding: "2px",
             }}
-            />
-        </h4>
+          />
+        </div>
       </div>
-      <div className="flex h-[100%]">
-      <div className="side-bar two-div w-[20rem] h-[100%]">
-        <Navbar setActiveMainComponent={setActiveMainComponent} setDashboardActiveComp={setDashboardActiveComp}/>
-      </div>
-      <div className="main-container two-div w-screen bg-slate-200 section-3">
-        {renderMainComponent()}
-      </div>
+      
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-80 h-full overflow-y-auto bg-white shadow-sm">
+          <Navbar 
+            setActiveMainComponent={setActiveMainComponent} 
+            setDashboardActiveComp={setDashboardActiveComp}
+          />
+        </div>
+        <main className="flex-1 overflow-y-auto bg-slate-100">
+          {renderMainComponent()}
+        </main>
       </div>
     </div>
   );

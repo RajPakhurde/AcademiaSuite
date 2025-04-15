@@ -27,6 +27,9 @@ const MarksEntry = () => {
   const [isEditCriteriaDisable, setIsEditCriteriaDisable] = useState(true);
   const [editCriteria, setEditCriteria] = useState("");
 
+  const [fetchedData, setFetchedData] = useState([]);
+  const [loading, setLoading] = useState(false);
+
   const years = [
     "Select year",
     "01/June 2011-31/May/2012",
@@ -91,6 +94,44 @@ const MarksEntry = () => {
     };
     fetchData();
   }, [examIdForeignKey]);
+
+  const handleGetData = async () => {
+    // Validate all required fields
+    if (year === "Select year" || 
+        branch === "Select branch" || 
+        semester === "Select semester" || 
+        examtypeValue === "" || 
+        pattern === "Select pattern" || 
+        subject === "Select subject") {
+      toast.error("Please fill all the required fields");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await window.api.invoke("get-marks-data", {
+        year,
+        branch,
+        semester,
+        exam: examtypeValue,
+        pattern,
+        subject
+      });
+
+      if (response.error) {
+        toast.error(response.error);
+        return;
+      }
+
+      setFetchedData(response);
+      toast.success("Data fetched successfully");
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error("Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="exam-code-container">
@@ -297,7 +338,13 @@ const MarksEntry = () => {
                 <button className="btn-edit" onClick={handleEdit}>
                   Edit
                 </button>
-                <button className="btn-getdata">Get Data</button>
+                <button 
+                  className="btn-getdata" 
+                  onClick={handleGetData}
+                  disabled={loading}
+                >
+                  {loading ? "Loading..." : "Get Data"}
+                </button>
                 <button className="btn-import">Import</button>
               </div>
             </div>
@@ -408,6 +455,38 @@ const MarksEntry = () => {
         </div>
         <hr />
       </Modal>
+
+      {/* Display fetched data in a table */}
+      {fetchedData.length > 0 && (
+        <div className="mt-4">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-gray-100">
+                <th className="border p-2">Sr. No</th>
+                <th className="border p-2">Student ID</th>
+                <th className="border p-2">Seat No</th>
+                <th className="border p-2">Student Name</th>
+                <th className="border p-2">Credit</th>
+                <th className="border p-2">ESE/PR/OR</th>
+                <th className="border p-2">IA/TW</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fetchedData.map((student, index) => (
+                <tr key={student.student_id} className="hover:bg-gray-50">
+                  <td className="border p-2">{index + 1}</td>
+                  <td className="border p-2">{student.student_id}</td>
+                  <td className="border p-2">{student.seat_no}</td>
+                  <td className="border p-2">{student.student_name}</td>
+                  <td className="border p-2">{student.credit}</td>
+                  <td className="border p-2">{student.ese_marks}</td>
+                  <td className="border p-2">{student.ia_marks}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 };
