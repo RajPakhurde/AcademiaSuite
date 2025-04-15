@@ -174,3 +174,4 @@
 -- SET pattern = 'Old Pattern';
 
 -- WHERE student_id IN (154);
+UPDATE student SET student_id = 'ST003' WHERE student_id = 134;

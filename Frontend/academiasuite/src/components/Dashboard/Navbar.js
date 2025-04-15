@@ -7,6 +7,7 @@ import PatternIcon from '@mui/icons-material/Pattern';
 import AppRegistrationIcon from '@mui/icons-material/AppRegistration';
 import LogoutIcon from '@mui/icons-material/Logout';
 import BackupIcon from '@mui/icons-material/Backup';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningIcon from '@mui/icons-material/Warning';
 import CircularProgress from '@mui/material/CircularProgress';
@@ -441,6 +442,22 @@ const Navbar = (props) => {
         >
           <p className="mb-0 p-2">
             <BackupIcon /> Backup
+          </p>
+        </div>
+
+        {/* // Marks Report nav element */}
+        <div
+          style={activeMenu === "marks_report" ? activeMenustyle : disableMenustyle}
+          className="nav-item hover:text-yellow-200"
+          onClick={() => {
+            setActiveMenu("marks_report");
+            setActiveSubMenu("");
+            setActiveSubSubMenu("");
+            props.setActiveMainComponent("marks_report");
+          }}
+        >
+          <p className="mb-0 p-2">
+            <AssessmentIcon /> Marks Report
           </p>
         </div>
         </div>

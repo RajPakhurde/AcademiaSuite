@@ -6,6 +6,8 @@ const { promises } = require("original-fs");
 const { event, data } = require("jquery");
 const fs = require('fs');
 const path = require('path');
+const PDFDocument = require('pdfkit');
+const XLSX = require('xlsx');
 
 let db = new sqlite3.Database("../../Backend/db/database.sqlite", (err) => {
   if (err) {
@@ -527,7 +529,7 @@ ipcMain.handle("check-subject", async (event, subjectName) => {
 });
 
 // update group list group master
-ipcMain.handle("edit-subject-group-name", async (e, data) => {
+ipcMain.handle("edit-subject-group-name", async (event, data) => {
   const { groupName, subjectIds, allSubjectIds } = data;
   console.log(subjectIds);
   if (!Array.isArray(subjectIds) || subjectIds.length === 0) {
@@ -750,6 +752,7 @@ ipcMain.handle("insert-in-exam-code", async (event, data) => {
     );
   });
 });
+
 ipcMain.handle("get-all-student-exams", async (event, data) => {
   return new Promise((resolve, reject) => {
     // Log incoming data for debugging
@@ -884,13 +887,6 @@ ipcMain.handle("update-student-pattern", async (event, data) => {
   });
 });
 
-
-
-
-
-
-
-
 // Fetch exam-code data
 ipcMain.handle("fetch-exam-code", async (event, data) => {
   return new Promise((resolve, reject) => {
@@ -914,7 +910,7 @@ ipcMain.handle("fetch-exam-code", async (event, data) => {
 // Delete one exam
 ipcMain.handle("delete-exam-code", async (event, exam_id) => {
   return new Promise((resolve, reject) => {
-    const query = "DELETE FROM exam_code WHERE exam_id = ? AND is_current = ?";
+    const query = "DELETE FROM exam_code WHERE exam_id = ? AND is_current =?";
 
     db.run(query, [exam_id, 0], function (err) {
       if (err) {
@@ -1745,5 +1741,631 @@ ipcMain.handle("login-user", async (event, { username, password }) => {
         });
       }
     });
+  });
+});
+
+ipcMain.handle("get-exam-list", async (event) => {
+  return new Promise((resolve, reject) => {
+    console.log('Fetching exam list from exams table...'); // Debug log
+    const query = `
+      SELECT 
+        exam_id,
+        exam_type,
+        CASE 
+          WHEN branch LIKE 'Computer%' THEN 'Comp'
+          WHEN branch LIKE 'Mechanical%' THEN 'Mech'
+          WHEN branch LIKE 'Civil%' THEN 'Civil'
+          WHEN branch LIKE 'Electronics%' THEN 'ENTC'
+          ELSE substr(branch, 1, 4)
+        END as branch,
+        heldin_month,
+        heldin_year,
+        pattern,
+        year || ' ' || semester as exam_code
+      FROM exams
+      ORDER BY exam_id DESC
+    `;
+    
+    db.all(query, [], (err, rows) => {
+      if (err) {
+        console.error("Error fetching exam list:", err);
+        reject(err);
+      } else {
+        console.log('Retrieved exam list:', rows); // Debug log
+        resolve(rows);
+      }
+    });
+  });
+});
+
+ipcMain.handle("get-subject-list", async (event, examId) => {
+  return new Promise((resolve, reject) => {
+    // First get the exam details to get branch, year, and semester
+    const examQuery = `
+      SELECT branch, year, semester
+      FROM exams
+      WHERE exam_id = ?
+    `;
+
+    db.get(examQuery, [examId], (err, examRow) => {
+      if (err) {
+        console.error("Error fetching exam details:", err);
+        return reject(err);
+      }
+
+      if (!examRow) {
+        console.log("No exam found with ID:", examId);
+        return resolve([]);
+      }
+
+      // Then get the subjects for this branch, year and semester
+      const subjectQuery = `
+        SELECT DISTINCT 
+          subject_name as id,
+          subject_name as name
+        FROM subject_master
+        WHERE branch = ?
+          AND year = ?
+          AND semester = ?
+        ORDER BY subject_name
+      `;
+
+      db.all(subjectQuery, [examRow.branch, examRow.year, examRow.semester], (err, rows) => {
+        if (err) {
+          console.error("Error fetching subject list:", err);
+          reject(err);
+        } else {
+          console.log("Retrieved subjects:", rows);
+          resolve(rows);
+        }
+      });
+    });
+  });
+});
+
+// Handler to fetch distinct subjects from marks table
+ipcMain.handle("fetch-subjects-by-exam", async (event, examId) => {
+  return new Promise((resolve, reject) => {
+    console.log('Fetching distinct subjects for exam_id:', examId);
+    
+    const query = `
+      SELECT DISTINCT subject
+      FROM marks
+      WHERE exam_id = ?
+      ORDER BY subject ASC
+    `;
+    
+    db.all(query, [examId], (err, rows) => {
+      if (err) {
+        console.error("Error fetching subjects from marks:", err);
+        reject(err);
+      } else {
+        console.log('Retrieved subjects:', rows);
+        
+        if (rows && rows.length > 0) {
+          // Transform the results into the expected format
+          const subjects = rows.map(row => ({
+            subject: row.subject
+          }));
+          resolve(subjects);
+        } else {
+          resolve([]);  // Return empty array if no subjects found
+        }
+      }
+    });
+  });
+});
+
+// Handler to generate subject-wise report
+ipcMain.handle("generate-subject-report", async (event, { examId, subjectName }) => {
+  return new Promise((resolve, reject) => {
+    console.log('Generating subject-wise report...');
+    console.log('Parameters:', { examId, subjectName });
+    
+    const query = `
+      SELECT 
+        s.name as student_name,
+        m.student_id,
+        m.subject,
+        m.credit,
+        m.ese_marks,
+        m.ia_marks
+      FROM marks m
+      LEFT JOIN student s ON m.student_id = s.student_id
+      WHERE m.exam_id = ? AND m.subject = ?
+      ORDER BY s.name
+    `;
+    
+    console.log('Executing query with params:', [examId, subjectName]);
+    
+    db.all(query, [examId, subjectName], (err, rows) => {
+      if (err) {
+        console.error("Error generating subject report:", err);
+        reject(err);
+      } else {
+        console.log('Query results:', rows);
+        console.log('Number of rows returned:', rows.length);
+        resolve(rows);
+      }
+    });
+  });
+});
+
+// Handler to generate complete report
+ipcMain.handle("generate-complete-report", async (event, { examId }) => {
+  return new Promise((resolve, reject) => {
+    console.log('Generating complete report for exam:', examId);
+    
+    const query = `
+      SELECT 
+        s.name as student_name,
+        m.student_id,
+        m.subject,
+        m.credit,
+        m.ese_marks,
+        m.ia_marks
+      FROM marks m
+      LEFT JOIN student s ON m.student_id = s.student_id
+      WHERE m.exam_id = ?
+      ORDER BY s.name, m.subject
+    `;
+    
+    db.all(query, [examId], (err, rows) => {
+      if (err) {
+        console.error("Error generating complete report:", err);
+        reject(err);
+      } else {
+        console.log('Generated report:', rows);
+        resolve(rows);
+      }
+    });
+  });
+});
+
+// Debug handler to check marks table data
+ipcMain.handle("debug-check-marks", async (event, examId) => {
+  return new Promise((resolve, reject) => {
+    console.log('Debugging marks table for exam_id:', examId);
+    
+    // First check what data exists in marks table
+    const debugQuery = `
+      SELECT exam_id, subject, COUNT(*) as count
+      FROM marks
+      WHERE exam_id = ?
+      GROUP BY exam_id, subject
+    `;
+    
+    db.all(debugQuery, [examId], (err, rows) => {
+      if (err) {
+        console.error("Error checking marks table:", err);
+        reject(err);
+      } else {
+        console.log('Available data in marks table:', rows);
+        
+        // If no data found, let's check what exam_ids exist
+        if (rows.length === 0) {
+          db.all('SELECT DISTINCT exam_id, subject FROM marks LIMIT 10', [], (err2, rows2) => {
+            if (err2) {
+              console.error("Error checking available exam_ids:", err2);
+              reject(err2);
+            } else {
+              console.log('Sample of available exam_ids and subjects in marks table:', rows2);
+              resolve({
+                forExamId: rows,
+                sampleData: rows2
+              });
+            }
+          });
+        } else {
+          resolve({
+            forExamId: rows,
+            sampleData: []
+          });
+        }
+      }
+    });
+  });
+});
+
+ipcMain.handle("export-report-pdf", async (event, { examId, subjectName, reportType, data }) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const examQuery = `
+        SELECT 
+          e.exam_type,
+          e.branch,
+          e.heldin_month,
+          e.heldin_year,
+          e.pattern,
+          e.year,
+          e.semester
+        FROM exams e
+        WHERE e.exam_id = ?
+      `;
+
+      db.get(examQuery, [examId], async (err, examDetails) => {
+        if (err) {
+          console.error("Error fetching exam details:", err);
+          return reject(err);
+        }
+
+        // Generate filename based on the format
+        let pdfFileName;
+        if (reportType === 'subject') {
+          pdfFileName = `${subjectName}-${examDetails.branch.slice(0, 4)}-${examDetails.pattern}-Sem${examDetails.semester.split(' ')[1]}-${examDetails.heldin_month}${examDetails.heldin_year}-(${examDetails.exam_type.split(' ')[0]}).pdf`;
+        } else {
+          pdfFileName = `Marks-Report-${examDetails.branch.slice(0, 4)}-${examDetails.pattern}-Sem${examDetails.semester.split(' ')[1]}-${examDetails.heldin_month}${examDetails.heldin_year}-(${examDetails.exam_type.split(' ')[0]}).pdf`;
+        }
+
+        // Create PDF document with larger page size
+        const doc = new PDFDocument({
+          size: 'A4',
+          margin: 50,
+          bufferPages: true
+        });
+        
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filePath = path.join(process.env.USERPROFILE || process.env.HOME, 'Downloads', pdfFileName);
+        
+        doc.pipe(fs.createWriteStream(filePath));
+
+        // Add title with styling
+        doc.font('Helvetica-Bold')
+           .fontSize(20)
+           .text(reportType === 'subject' ? `${subjectName} Marks Report` : 'Complete Marks Report', 
+                 { align: 'center' });
+        doc.moveDown();
+
+        // Add exam details with better formatting
+        if (examDetails) {
+          // Draw a light gray background for the header section
+          const headerStartY = doc.y;
+          doc.fillColor('#f8f8f8')
+             .rect(50, headerStartY, 500, 120)
+             .fill();
+          
+          const detailsStartX = 70;
+          let detailsY = headerStartY + 15;
+          const columnWidth = 250;
+          
+          // First column - Exam Details
+          doc.font('Helvetica-Bold').fontSize(12).fillColor('#000000');
+          doc.text('Exam Details:', detailsStartX, detailsY);
+          doc.font('Helvetica').fontSize(11).moveDown(0.5);
+          doc.text(`Exam Type: ${examDetails.exam_type}`, detailsStartX, doc.y);
+          doc.moveDown(0.3);
+          doc.text(`Branch: ${examDetails.branch}`, detailsStartX, doc.y);
+          doc.moveDown(0.3);
+          doc.text(`Held In: ${examDetails.heldin_month} ${examDetails.heldin_year}`, detailsStartX, doc.y);
+          
+          // Second column - Academic Details
+          doc.font('Helvetica-Bold').fontSize(12);
+          doc.text('Academic Details:', detailsStartX + columnWidth, detailsY);
+          doc.font('Helvetica').fontSize(11);
+          doc.text(`Pattern: ${examDetails.pattern}`, detailsStartX + columnWidth, detailsY + 25);
+          doc.text(`Year: ${examDetails.year}`, detailsStartX + columnWidth, detailsY + 45);
+          doc.text(`Semester: ${examDetails.semester}`, detailsStartX + columnWidth, detailsY + 65);
+        }
+        
+        doc.moveDown(2);
+
+        // Helper function to draw table cell
+        const drawTableCell = (text, x, y, width, align = 'left', isHeader = false) => {
+          // Draw cell border
+          doc.rect(x, y, width, rowHeight).stroke();
+          
+          // Draw cell background if header or alternate row
+          if (isHeader) {
+            doc.fillColor('#e8e8e8').rect(x, y, width, rowHeight).fill();
+          }
+          
+          // Reset text color and draw text
+          doc.fillColor('#000000')
+             .text(text || '-',
+                  x + 5,
+                  y + (rowHeight - doc.currentLineHeight()) / 2,
+                  {
+                    width: width - 10,
+                    align: align,
+                    lineBreak: false
+                  });
+        };
+
+        // Table configuration
+        const tableTop = doc.y + 20;
+        const tableLeft = 50;
+        const columnWidths = {
+          studentName: 180,
+          subject: 140,
+          credit: 70,
+          eseMarks: 70,
+          iaMarks: 70
+        };
+        const rowHeight = 30;
+        let currentY = tableTop;
+
+        // Function to draw table header
+        const drawTableHeader = (y) => {
+          let x = tableLeft;
+          doc.font('Helvetica-Bold').fontSize(11);
+          
+          // Draw header cells
+          drawTableCell('Student Name', x, y, columnWidths.studentName, 'left', true);
+          x += columnWidths.studentName;
+          drawTableCell('Subject', x, y, columnWidths.subject, 'left', true);
+          x += columnWidths.subject;
+          drawTableCell('Credit', x, y, columnWidths.credit, 'center', true);
+          x += columnWidths.credit;
+          drawTableCell('ESE Marks', x, y, columnWidths.eseMarks, 'center', true);
+          x += columnWidths.eseMarks;
+          drawTableCell('IA Marks', x, y, columnWidths.iaMarks, 'center', true);
+          
+          return y + rowHeight;
+        };
+
+        // Draw initial header
+        currentY = drawTableHeader(currentY);
+
+        // Draw table data
+        doc.font('Helvetica').fontSize(10);
+        data.forEach((row, index) => {
+          // Check if we need a new page
+          if (currentY > 750) {
+            doc.addPage();
+            currentY = 50;
+            currentY = drawTableHeader(currentY);
+          }
+
+          let x = tableLeft;
+          
+          // Draw row cells
+          drawTableCell(row.student_name || 'Unknown', x, currentY, columnWidths.studentName);
+          x += columnWidths.studentName;
+          drawTableCell(row.subject, x, currentY, columnWidths.subject);
+          x += columnWidths.subject;
+          drawTableCell(row.credit?.toString(), x, currentY, columnWidths.credit, 'center');
+          x += columnWidths.credit;
+          drawTableCell(row.ese_marks?.toString(), x, currentY, columnWidths.eseMarks, 'center');
+          x += columnWidths.eseMarks;
+          drawTableCell(row.ia_marks?.toString(), x, currentY, columnWidths.iaMarks, 'center');
+
+          currentY += rowHeight;
+        });
+
+        // Add summary section at the bottom with a border
+        doc.moveDown(2);
+        const summaryStartY = doc.y;
+        doc.fillColor('#f8f8f8')
+           .rect(50, summaryStartY, 500, reportType === 'subject' ? 80 : 50)
+           .fill();
+        
+        doc.fillColor('#000000')
+           .font('Helvetica-Bold')
+           .fontSize(11)
+           .text('Report Summary:', 70, summaryStartY + 15);
+        doc.font('Helvetica').fontSize(10);
+        doc.text(`Total Students: ${data.length}`, 90, doc.y);
+        
+        if (reportType === 'subject') {
+          doc.moveDown(0.5);
+          doc.text(`Subject: ${subjectName}`, 90, doc.y);
+          // Calculate and display averages
+          const avgEse = data.reduce((sum, row) => sum + (Number(row.ese_marks) || 0), 0) / data.length;
+          const avgIa = data.reduce((sum, row) => sum + (Number(row.ia_marks) || 0), 0) / data.length;
+          doc.text(`Average ESE Marks: ${avgEse.toFixed(2)}`, 90, doc.y);
+          doc.text(`Average IA Marks: ${avgIa.toFixed(2)}`, 90, doc.y);
+        }
+
+        // Add footer with page numbers and timestamp
+        const pages = doc.bufferedPageRange();
+        for (let i = 0; i < pages.count; i++) {
+          doc.switchToPage(i);
+          doc.fontSize(8)
+             .text(
+               `Page ${i + 1} of ${pages.count} | Generated on: ${new Date().toLocaleString()}`,
+               50,
+               800,
+               { align: 'center' }
+             );
+        }
+
+        // Finalize PDF
+        doc.end();
+
+        console.log('PDF file generated successfully:', filePath);
+        resolve({ success: true, filePath });
+      });
+    } catch (error) {
+      console.error('Error generating PDF file:', error);
+      reject(error);
+    }
+  });
+});
+
+ipcMain.handle("export-report-excel", async (event, { examId, subjectName, reportType, data }) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const examQuery = `
+        SELECT 
+          e.exam_type,
+          e.branch,
+          e.heldin_month,
+          e.heldin_year,
+          e.pattern,
+          e.year,
+          e.semester
+        FROM exams e
+        WHERE e.exam_id = ?
+      `;
+
+      db.get(examQuery, [examId], async (err, examDetails) => {
+        if (err) {
+          console.error("Error fetching exam details:", err);
+          return reject(err);
+        }
+
+        // Generate filename based on the format
+        let excelFileName;
+        if (reportType === 'subject') {
+          excelFileName = `${subjectName}-${examDetails.branch.slice(0, 4)}-${examDetails.pattern}-Sem${examDetails.semester.split(' ')[1]}-${examDetails.heldin_month}${examDetails.heldin_year}-(${examDetails.exam_type.split(' ')[0]}).xlsx`;
+        } else {
+          excelFileName = `Marks-Report-${examDetails.branch.slice(0, 4)}-${examDetails.pattern}-Sem${examDetails.semester.split(' ')[1]}-${examDetails.heldin_month}${examDetails.heldin_year}-(${examDetails.exam_type.split(' ')[0]}).xlsx`;
+        }
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Create header rows with formatting
+        const headerRows = [
+          [{ v: 'Marks Report', t: 's' }],
+          [''],
+          [{ v: 'Exam Details:', t: 's' }, '', { v: 'Academic Details:', t: 's' }],
+          [
+            { v: `Exam Type: ${examDetails?.exam_type || ''}`, t: 's' }, 
+            '', 
+            { v: `Pattern: ${examDetails?.pattern || ''}`, t: 's' }
+          ],
+          [
+            { v: `Branch: ${examDetails?.branch || ''}`, t: 's' }, 
+            '', 
+            { v: `Year: ${examDetails?.year || ''}`, t: 's' }
+          ],
+          [
+            { v: `Held In: ${examDetails?.heldin_month || ''} ${examDetails?.heldin_year || ''}`, t: 's' }, 
+            '', 
+            { v: `Semester: ${examDetails?.semester || ''}`, t: 's' }
+          ],
+          ['']
+        ];
+
+        if (reportType === 'subject') {
+          headerRows.push([{ v: `Subject: ${subjectName}`, t: 's' }], ['']);
+        }
+
+        // Add table headers
+        headerRows.push([
+          { v: 'Student Name', t: 's' },
+          { v: 'Subject', t: 's' },
+          { v: 'Credit', t: 's' },
+          { v: 'ESE Marks', t: 's' },
+          { v: 'IA Marks', t: 's' }
+        ]);
+
+        // Convert data to rows
+        const dataRows = data.map(row => [
+          { v: row.student_name || 'Unknown', t: 's' },
+          { v: row.subject, t: 's' },
+          { v: row.credit || '-', t: 's' },
+          { v: row.ese_marks || '-', t: 'n' },
+          { v: row.ia_marks || '-', t: 'n' }
+        ]);
+
+        // Calculate totals and averages for subject-wise report
+        if (reportType === 'subject') {
+          const totalEse = data.reduce((sum, row) => sum + (Number(row.ese_marks) || 0), 0);
+          const totalIa = data.reduce((sum, row) => sum + (Number(row.ia_marks) || 0), 0);
+          const avgEse = totalEse / data.length;
+          const avgIa = totalIa / data.length;
+
+          dataRows.push(
+            [''], // Empty row for spacing
+            [
+              { v: 'Totals:', t: 's' },
+              '',
+              '',
+              { v: totalEse, t: 'n' },
+              { v: totalIa, t: 'n' }
+            ],
+            [
+              { v: 'Averages:', t: 's' },
+              '',
+              '',
+              { v: Number(avgEse.toFixed(2)), t: 'n' },
+              { v: Number(avgIa.toFixed(2)), t: 'n' }
+            ]
+          );
+        }
+
+        // Add summary section
+        dataRows.push(
+          [''], // Empty row for spacing
+          [{ v: 'Report Summary', t: 's' }],
+          [{ v: `Total Students: ${data.length}`, t: 's' }],
+          [{ v: `Generated on: ${new Date().toLocaleString()}`, t: 's' }]
+        );
+
+        // Combine all rows
+        const allRows = [...headerRows, ...dataRows];
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(allRows);
+
+        // Set column widths
+        ws['!cols'] = [
+          { wch: 30 }, // Student Name
+          { wch: 25 }, // Subject
+          { wch: 10 }, // Credit
+          { wch: 12 }, // ESE Marks
+          { wch: 12 }  // IA Marks
+        ];
+
+        // Define styles
+        const styles = {
+          title: {
+            font: { bold: true, sz: 16, color: { rgb: "000000" } },
+            fill: { fgColor: { rgb: "E0E0E0" } },
+            alignment: { horizontal: "center" }
+          },
+          header: {
+            font: { bold: true },
+            fill: { fgColor: { rgb: "F2F2F2" } }
+          },
+          tableHeader: {
+            font: { bold: true },
+            fill: { fgColor: { rgb: "D9D9D9" } },
+            alignment: { horizontal: "center" }
+          }
+        };
+
+        // Merge cells for title
+        ws['!merges'] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }  // Merge first row across all columns
+        ];
+
+        // Apply styles
+        const range = XLSX.utils.decode_range(ws['!ref']);
+        for (let R = range.s.r; R <= range.e.r; R++) {
+          for (let C = range.s.c; C <= range.e.c; C++) {
+            const cell_address = { c: C, r: R };
+            const cell_ref = XLSX.utils.encode_cell(cell_address);
+            
+            if (!ws[cell_ref]) continue;
+
+            // Initialize style if not exists
+            if (!ws[cell_ref].s) ws[cell_ref].s = {};
+
+            // Apply styles based on row position
+            if (R === 0) {
+              ws[cell_ref].s = styles.title;
+            } else if (R === 2 || R === headerRows.length - 1) {
+              ws[cell_ref].s = styles.header;
+            }
+          }
+        }
+
+        // Add the worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, "Marks Report");
+
+        // Save the file
+        const filePath = path.join(process.env.USERPROFILE || process.env.HOME, 'Downloads', excelFileName);
+        XLSX.writeFile(wb, filePath, { bookType: 'xlsx', bookSST: false, type: 'binary' });
+
+        console.log('Excel file generated successfully:', filePath);
+        resolve({ success: true, filePath });
+      });
+    } catch (error) {
+      console.error('Error generating Excel file:', error);
+      reject(error);
+    }
   });
 });
