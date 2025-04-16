@@ -345,6 +345,137 @@ app.post('/api/restore/:filename', async (req, res) => {
     }
 });
 
+// New endpoint to send PDF to students
+app.post('/api/send-pdf-to-students', async (req, res) => {
+    const { pdfData, subject, message } = req.body;
+
+    if (!pdfData || !subject || !message) {
+        return res.status(400).json({ 
+            success: false, 
+            message: 'Missing required fields: pdfData, subject, or message' 
+        });
+    }
+
+    try {
+        // Get all students with email addresses
+        const students = await new Promise((resolve, reject) => {
+            db.all('SELECT student_id, name, email FROM student WHERE email IS NOT NULL', [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        });
+
+        if (students.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: 'No students found with email addresses' 
+            });
+        }
+
+        // Convert base64 PDF to buffer
+        const pdfBuffer = Buffer.from(pdfData, 'base64');
+
+        // Send email to each student
+        const sentEmails = [];
+        const failedEmails = [];
+
+        for (const student of students) {
+            try {
+                const mailOptions = {
+                    from: process.env.EMAIL_USER,
+                    to: student.email,
+                    subject: subject,
+                    html: `
+                        <h2>Dear ${student.name},</h2>
+                        <p>${message}</p>
+                        <p>Please find the attached document.</p>
+                        <p>Best regards,<br>AcademiaSuite</p>
+                    `,
+                    attachments: [{
+                        filename: 'notice.pdf',
+                        content: pdfBuffer,
+                        contentType: 'application/pdf'
+                    }]
+                };
+
+                await transporter.sendMail(mailOptions);
+                sentEmails.push(student.email);
+            } catch (err) {
+                console.error(`Failed to send email to ${student.email}:`, err);
+                failedEmails.push(student.email);
+            }
+        }
+
+        // Create a notification in the database
+        const notification = {
+            id: Date.now(),
+            type: 'info',
+            message: `PDF notice sent to ${sentEmails.length} students`,
+            timestamp: new Date().toISOString()
+        };
+
+        // Save notification to database (you'll need to create a notifications table)
+        await new Promise((resolve, reject) => {
+            db.run(
+                'INSERT INTO notifications (id, type, message, timestamp) VALUES (?, ?, ?, ?)',
+                [notification.id, notification.type, notification.message, notification.timestamp],
+                (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
+
+        res.json({
+            success: true,
+            sentCount: sentEmails.length,
+            failedCount: failedEmails.length,
+            sentEmails,
+            failedEmails,
+            message: `Successfully sent to ${sentEmails.length} students, failed for ${failedEmails.length} students`
+        });
+
+    } catch (err) {
+        console.error('Error sending PDF to students:', err);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Error sending PDF to students: ' + err.message 
+        });
+    }
+});
+
+// Get all notifications
+app.get('/api/notifications', (req, res) => {
+  db.all('SELECT * FROM notifications ORDER BY timestamp DESC', [], (err, rows) => {
+    if (err) {
+      console.error('Error fetching notifications:', err);
+      res.status(500).json({ success: false, error: 'Failed to fetch notifications' });
+      return;
+    }
+    res.json({ success: true, notifications: rows });
+  });
+});
+
+// Mark notification as read
+app.post('/api/notifications/:id/read', (req, res) => {
+  const { id } = req.params;
+  
+  db.run('UPDATE notifications SET read = 1 WHERE id = ?', [id], function(err) {
+    if (err) {
+      console.error('Error marking notification as read:', err);
+      res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
+      return;
+    }
+    
+    if (this.changes === 0) {
+      res.status(404).json({ success: false, error: 'Notification not found' });
+      return;
+    }
+    
+    res.json({ success: true });
+  });
+});
+
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
   });

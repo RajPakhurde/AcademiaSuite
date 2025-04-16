@@ -40,4 +40,12 @@ CREATE TABLE IF NOT EXISTS subject_master (
     semester TEXT NOT NULL,
     pattern TEXT NOT NULL,
     credit INTEGER NOT NULL
+);
+
+-- Create notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    timestamp TEXT NOT NULL
 ); 

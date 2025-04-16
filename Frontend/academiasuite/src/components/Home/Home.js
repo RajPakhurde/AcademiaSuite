@@ -11,6 +11,30 @@ import { CircularProgress } from '@mui/material';
 const Home = () => {
   const [studentsCount, setstudentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  const slides = [
+    {
+      image: "/assets/images/college-img-4.jpg",
+      alt: "College Logo"
+    },
+    {
+      image: "/assets/images/college-img-3.jpg",
+      alt: "Hackathon Event"
+    },
+    {
+      image: "/assets/images/college-img-5.jpg",
+      alt: "College Campus"
+    }
+  ];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const getAllStudents = async () => {
     try {
@@ -35,7 +59,36 @@ const Home = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
-      <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard Overview</h1>
+      <h1 className="text-3xl font-bold text-gray-800 mb-4">Dashboard Overview</h1>
+
+      {/* Slideshow Section */}
+      <div className="relative w-full h-[400px] mb-8 rounded-xl overflow-hidden shadow-lg">
+        {slides.map((slide, index) => (
+          <div
+            key={index}
+            className={`absolute w-full h-full transition-opacity duration-1000 ${
+              index === currentSlide ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <img
+              src={slide.image}
+              alt={slide.alt}
+              className="w-full h-full object-cover"
+            />
+          </div>
+        ))}
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-2">
+          {slides.map((_, index) => (
+            <button
+              key={index}
+              className={`w-3 h-3 rounded-full ${
+                index === currentSlide ? 'bg-white' : 'bg-white/50'
+              }`}
+              onClick={() => setCurrentSlide(index)}
+            />
+          ))}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         {/* Stats Cards */}

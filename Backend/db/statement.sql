@@ -174,4 +174,15 @@
 -- SET pattern = 'Old Pattern';
 
 -- WHERE student_id IN (154);
-UPDATE student SET student_id = 'ST003' WHERE student_id = 134;
+-- UPDATE student SET student_id = 'ST003' WHERE student_id = 134;
+
+-- ALTER TABLE student ADD COLUMN email TEXT;
+
+-- UPDATE student 
+-- SET email = CASE 
+--     WHEN student_id = 'ST001' THEN 'dawreasjad72@gmail.com'
+--     WHEN student_id = 'ST002' THEN 'pakhurderaj12@gmail.com'
+--     WHEN student_id = 'ST003' THEN 'rajofficial4803@gmail.com'
+--     ELSE email
+-- END
+-- WHERE student_id IN ('ST001', 'ST002', 'ST003');

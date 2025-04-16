@@ -10,6 +10,7 @@ import BackupIcon from '@mui/icons-material/Backup';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import CloseIcon from '@mui/icons-material/Close';
 import WarningIcon from '@mui/icons-material/Warning';
+import NotificationsIcon from '@mui/icons-material/Notifications';
 import CircularProgress from '@mui/material/CircularProgress';
 import Backup from "../Backup/backup";
 import axios from "axios";
@@ -458,6 +459,22 @@ const Navbar = (props) => {
         >
           <p className="mb-0 p-2">
             <AssessmentIcon /> Marks Report
+          </p>
+        </div>
+
+        {/* Notifications nav element */}
+        <div
+          style={activeMenu === "notifications" ? activeMenustyle : disableMenustyle}
+          className="nav-item hover:text-yellow-200"
+          onClick={() => {
+            setActiveMenu("notifications");
+            setActiveSubMenu("");
+            setActiveSubSubMenu("");
+            props.setActiveMainComponent("notifications");
+          }}
+        >
+          <p className="mb-0 p-2">
+            <NotificationsIcon /> Notifications
           </p>
         </div>
         </div>

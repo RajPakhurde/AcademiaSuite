@@ -16,6 +16,7 @@ import OverallEligibility from "../Entry/OverallEligibility";
 import AcademicEligibility from "../Academic/AcademicEligibility";
 import Backup from "../Backup/backup";
 import MarksReport from "../ReportGeneration/MarksReport";
+import Notifications from "../Notifications/Notifications";
 
 const Dashboard = ({user, setDashboardActiveComp}) => {
   const [activeMainComponent, setActiveMainComponent] = useState("home");
@@ -52,6 +53,8 @@ const Dashboard = ({user, setDashboardActiveComp}) => {
         return <Backup />;
       case "marks_report":
         return <MarksReport />;
+      case "notifications":
+        return <Notifications />;
       default:
         return <Home setActiveMainComponent={setActiveMainComponent} />;
     }
